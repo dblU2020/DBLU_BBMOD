@@ -40,7 +40,7 @@ conditions, solo, USB audio and MIDI, ...) see the [JOEBOX 1 README](https://git
 
 1. Download **blackbox 3.1.9** from <https://1010music.com/downloads> and unzip it. You need the `BLACKBOX.bin` inside.
 2. Patch it, either way:
-   - **In your browser:** <https://dblu2020.github.io/dblu_bbmod/>. Your file never leaves your computer.
+   - **In your browser:** <https://dblu2020.github.io/DBLU_BBMOD/>. Your file never leaves your computer.
    - **With Python 3:** `python3 apply.py path/to/BLACKBOX.bin` → `out/blackbox-mod-dblu-bbmod-01/`
 3. Keep the stock `BLACKBOX.bin` somewhere safe. That file is your way back.
 4. Copy **both** files, `BLACKBOX.bin` and `BBEXTRA.BIN`, to the **root** of the microSD card.
