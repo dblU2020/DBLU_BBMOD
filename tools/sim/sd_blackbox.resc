@@ -1,0 +1,8 @@
+# Virtual SD card for the Blackbox 3.1.9 (and blackbox-mod, same addresses below the mod's cave): include after
+# boot.resc. Same sd_diskio as the Micro (driver table 0x080cfc1c), see sim/sdhook.py.
+python "import sys; sys.path.append('$simdir'); import sdhook; sdhook.open_image('$sdimg')"
+cpu AddHook 0x080458DC "import sdhook; sdhook.init(self)"
+cpu AddHook 0x08045AB4 "import sdhook; sdhook.status(self)"
+cpu AddHook 0x08045974 "import sdhook; sdhook.read(self)"
+cpu AddHook 0x080459E8 "import sdhook; sdhook.write(self)"
+cpu AddHook 0x08045A5C "import sdhook; sdhook.ioctl(self)"

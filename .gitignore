@@ -1,0 +1,17 @@
+# 1010music's firmware is never committed here. Bring your own copy.
+firmware/*
+!firmware/README.md
+*.bin
+*.BIN
+*.elf
+*.o
+out/
+.venv/
+__pycache__/
+ghidra/*.rep/
+ghidra/*.gpr
+ghidra/out_*.c
+*.dylib
+ghidra/*.lock
+ghidra/*.lock~
+.claude/settings.local.json

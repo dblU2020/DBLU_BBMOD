@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBLU_BBMOD patcher</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; background: #14161a; color: #e8e6e1; margin: 0; padding: 24px 16px; }
+  main { max-width: 620px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .brand { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  .brand .logo { flex: none; }
+  a { color: #e2b043; }
+  .box { border: 1px solid #343840; border-radius: 8px; padding: 16px; margin: 20px 0; background: #1b1e24; }
+  input[type=file] { width: 100%; margin: 8px 0; color: inherit; }
+  #status { margin-top: 12px; white-space: pre-wrap; }
+  .ok { color: #7fd18b; } .err { color: #ef7b6f; }
+  a.btn { display: inline-block; margin-top: 12px; padding: 10px 16px; background: #e2b043; color: #14161a;
+          border-radius: 6px; text-decoration: none; font-weight: 600; }
+  small, .fine { color: #9a9ea8; font-size: .85rem; }
+  code { font-size: .8rem; word-break: break-all; }
+</style>
+<main>
+  <div class="brand">
+    <h1>DBLU_BBMOD patcher</h1>
+  </div>
+  <p>Unofficial mod for the original 1010music Blackbox: per-pad EQ, a classic ladder filter and ENV·V, on top of Justin Joe's <a href="https://github.com/j3threejay/blackbox-mod">JOEBOX 1</a>. <a href="https://github.com/dblU2020/dblu_bbmod">What it adds, source, known issues</a>.</p>
+  <ol>
+    <li>Download <b>blackbox 3.1.9</b> from <a href="https://1010music.com/downloads">1010music.com/downloads</a> and unzip it.</li>
+    <li>Choose the <code>BLACKBOX.bin</code> from that zip below. Keep that stock file as your backup.</li>
+    <li id="copy">Copy <b>both</b> files you get (<code>BLACKBOX.bin</code> and <code>BBEXTRA.BIN</code>) to the root of the microSD card and install it like any firmware update (hold BACK + INFO while powering on). The first boot restarts itself once.</li>
+  </ol>
+  <div class="box">
+    <label for="f"><b>Your stock 3.1.9 BLACKBOX.bin</b></label>
+    <input id="f" type="file" accept=".bin">
+    <small>The file is patched in this page. Nothing is uploaded.</small>
+    <div id="status"></div>
+    <div id="dl"></div>
+  </div>
+  <p class="fine">Not affiliated with, endorsed by, or supported by 1010music. "1010music" and "Blackbox" are trademarks of
+  1010music LLC. This page does not contain or distribute 1010music's firmware; it only modifies the copy you supply.
+  Use at your own risk; modified firmware may affect your warranty. The mod's code is MIT-licensed and includes MIT-licensed
+  work by Justin Joe (JOEBOX), Charles Vestal, CHOMPI Club, Émilie Gillet and Electrosmith
+  (<a href="https://github.com/dblU2020/dblu_bbmod/blob/main/THIRD_PARTY.md">notices</a>).</p>
+</main>
+<script>
+const PATCH = "blackbox-mod-dblu-bbmod-01.json";
+const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+const unhex = s => Uint8Array.from(s.match(/../g) || [], h => parseInt(h, 16));
+const sha = async b => hex(await crypto.subtle.digest("SHA-256", b));
+const status = document.getElementById("status"), dl = document.getElementById("dl");
+const say = (t, c) => { status.textContent = t; status.className = c || ""; };
+
+// Builds that keep part of the mod in the chip's second flash bank come as two files. They go out as one zip so
+// neither gets left behind: a plain "stored" zip, which every unzipper reads.
+const CRC = Uint32Array.from({ length: 256 }, (_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? 0xEDB88320 ^ (n >>> 1) : n >>> 1; return n >>> 0; });
+const crc32 = b => { let c = ~0; for (const x of b) c = CRC[(c ^ x) & 0xFF] ^ (c >>> 8); return ~c >>> 0; };
+function zip(files) {                                   // [{ name, data: Uint8Array }]
+  const enc = new TextEncoder(), parts = [], dir = [];
+  let at = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), n = f.data.length;
+    const head = new DataView(new ArrayBuffer(30));
+    head.setUint32(0, 0x04034b50, true); head.setUint16(4, 20, true); head.setUint16(8, 0, true);
+    head.setUint32(14, crc, true); head.setUint32(18, n, true); head.setUint32(22, n, true); head.setUint16(26, name.length, true);
+    const cen = new DataView(new ArrayBuffer(46));
+    cen.setUint32(0, 0x02014b50, true); cen.setUint16(4, 20, true); cen.setUint16(6, 20, true);
+    cen.setUint32(16, crc, true); cen.setUint32(20, n, true); cen.setUint32(24, n, true); cen.setUint16(28, name.length, true);
+    cen.setUint32(42, at, true);
+    parts.push(new Uint8Array(head.buffer), name, f.data);
+    dir.push(new Uint8Array(cen.buffer), name);
+    at += 30 + name.length + n;
+  }
+  const size = dir.reduce((s, d) => s + d.length, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, size, true); end.setUint32(16, at, true);
+  return new Blob([...parts, ...dir, new Uint8Array(end.buffer)], { type: "application/zip" });
+}
+
+// Stock image + patch -> the files for the card, each one checked. Throws with a message for the user.
+async function build(stock, p) {
+  if (await sha(stock) !== p.stock_sha256)
+    throw new Error(`That is not the stock ${p.stock_version} firmware (its SHA-256 differs), so nothing was patched.\n` +
+                    "Use the BLACKBOX.bin straight out of 1010music's 3.1.9 zip.");
+  const add = unhex(p.append);
+  const out = new Uint8Array(stock.length + add.length);
+  out.set(stock);
+  for (const w of p.writes) out.set(unhex(w.bytes), w.offset);
+  out.set(add, stock.length);
+  if (await sha(out) !== p.output_sha256) throw new Error("The patched image failed its check. Nothing to download.");
+  const files = [{ name: "BLACKBOX.bin", data: out }];
+  for (const x of p.extra || []) {
+    const data = unhex(x.bytes);
+    if (/[\\/]/.test(x.name) || data.length !== x.size || await sha(data) !== x.sha256)
+      throw new Error(`${x.name} in the patch failed its check. Nothing to download.`);
+    files.push({ name: x.name, data });
+  }
+  return files;
+}
+
+function offer(blob, name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.className = "btn";
+  a.textContent = text;
+  dl.appendChild(a);
+}
+
+if (typeof document !== "undefined") document.getElementById("f").addEventListener("change", async e => {
+  dl.innerHTML = "";
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const p = typeof PATCH === "string" ? await (await fetch(PATCH)).json() : PATCH;   // a standalone copy carries it inline
+    const files = await build(new Uint8Array(await file.arrayBuffer()), p);
+    if (files.length === 1) {
+      offer(new Blob([files[0].data], { type: "application/octet-stream" }), "BLACKBOX.bin", `Download patched BLACKBOX.bin (${p.version})`);
+      say(`Stock ${p.stock_version} confirmed. Patched to ${p.version} and verified.`, "ok");
+    } else {
+      const names = files.map(f => f.name).join(" and ");
+      offer(zip(files), `blackbox-mod-${p.slug || p.version}.zip`, `Download ${p.version} (${files.length} files, zipped)`);
+      document.getElementById("copy").innerHTML = `Unzip it and copy <b>both</b> files, <code>${files.map(f => f.name).join("</code> and <code>")}</code>, ` +
+        "to the root of the microSD card. Install like any firmware update. The Blackbox restarts itself once, a second or two " +
+        "into the first boot: that is the second file being installed.";
+      say(`Stock ${p.stock_version} confirmed. Patched to ${p.version} and verified.\nThis build is TWO files: ${names}. Both go on the card.`, "ok");
+    }
+  } catch (err) {
+    say(err.message.startsWith("That is not") || err.message.includes("failed its check") ? err.message : "Something went wrong: " + err.message, "err");
+  }
+});
+</script>
+</html>

@@ -1,0 +1,74 @@
+// Blackbox (original, fw 3.1.9; STM32H7, Renode 1.17), derived from micro.repl. Bitbox micro: the stock H743 description plus what the micro firmware touches.
+// Spike: no display / audio / SD models yet; unknown registers read as 0 (Renode warns once per register).
+using "platforms/cpus/stm32h743.repl"
+
+spi1: SPI.STM32H7_SPI @ { sysbus 0x40013000 }
+spi2: SPI.STM32H7_SPI @ { sysbus 0x40003800 }
+spi3: SPI.STM32H7_SPI @ { sysbus 0x40003C00 }
+spi5: SPI.STM32H7_SPI @ { sysbus 0x40015000 }
+
+// Codec PCM3168A on I2C1 at 7-bit 0x44 (the firmware's "address 68" is decimal): acknowledges everything.
+codec: Mocks.DummyI2CSlave @ i2c1 0x44
+// Blackbox: device at I2C1 0x4c (probed at boot, retried without an answer; identity not verified)
+bb4c: Mocks.DummyI2CSlave @ i2c1 0x4c
+// I2C1 0x5d: Goodix GT911 touch controller (driver 0x08046154 / 0x08046548, registers 0x8140 / 0x814e / 0x814f);
+// sim/PortkitGT911.cs, compiled at run time (include it before this description). Without any answer every poll ends
+// in a HAL timeout and the app never gets past the splash.
+touch: Input.PortkitGT911 @ i2c1 0x5d
+
+// SAI1-3 (audio to / from the codec): registers kept, the status registers (block A +0x18, block B +0x38) report a
+// non-empty FIFO (FLVL = 1, FREQ) so HAL_SAI_Transmit_DMA's start-up wait passes. No audio is moved yet.
+sai1: Python.PythonPeripheral @ sysbus 0x40015800
+    size: 0x400
+    initable: true
+    script: '''
+if request.IsInit:
+    regs = {}
+elif request.IsRead:
+    if request.Offset in (0x18, 0x38):
+        request.Value = 0x00010008
+    else:
+        request.Value = regs.get(request.Offset, 0)
+else:
+    regs[request.Offset] = request.Value
+'''
+
+sai2: Python.PythonPeripheral @ sysbus 0x40015C00
+    size: 0x400
+    initable: true
+    script: '''
+if request.IsInit:
+    regs = {}
+elif request.IsRead:
+    if request.Offset in (0x18, 0x38):
+        request.Value = 0x00010008
+    else:
+        request.Value = regs.get(request.Offset, 0)
+else:
+    regs[request.Offset] = request.Value
+'''
+
+// DMA2 replaced (sim/PortkitAudioDMA.cs, compiled at run time: include it before this description): circular streams
+// with half / complete interrupts on an audio clock, so audioTask (engine, button polling) runs.
+dma2: @none
+audioDma: DMA.PortkitAudioDMA @ sysbus 0x40020400
+    [0-7] -> nvic@[56-60, 68-70]
+
+// LPUART1 (0x58000c00): the Blackbox inits it at boot and waits in UART_CheckIdleState (0x08082fac) for TEACK / REACK
+// (ISR bits 21 / 22), which Renode's STM32F7_USART model does not set; the long wait ends in a fault in the
+// simulation. Replaced by a stub: registers kept, ISR reports TEACK | REACK | TXE | TC.
+lpuart1: @none
+lpuart1stub: Python.PythonPeripheral @ sysbus 0x58000c00
+    size: 0x400
+    initable: true
+    script: '''
+if request.IsInit:
+    regs = {}
+elif request.IsRead:
+    if request.Offset == 0x1C:
+        request.Value = 0x006000C0
+    else:
+        request.Value = regs.get(request.Offset, 0)
+else:
+    regs[request.Offset] = request.Value
+'''

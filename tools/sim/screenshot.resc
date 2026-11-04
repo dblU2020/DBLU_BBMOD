@@ -1,0 +1,4 @@
+# Screenshot dump (use after a run): LTDC registers + both layer framebuffers into $shot (a directory that exists).
+# Then: python3 sim/screenshot.py <dir> out.png. Generated scripts substitute $shot with an absolute path.
+python "b=self.Machine.SystemBus; d='$shot'; f=open(d+'/ltdc.txt','w'); [f.write('%x %x\n' % (o, b.ReadDoubleWord(0x50001000+o))) for o in list(range(0x08,0x48,4))+list(range(0x84,0xB8,4))+list(range(0x104,0x138,4))]; f.close()"
+python "import System; b=self.Machine.SystemBus; d='$shot'; [System.IO.File.WriteAllBytes(d+'/layer%d.bin' % n, b.ReadBytes(b.ReadDoubleWord(0x50001000+0x84+0x80*(n-1)+0x28), (b.ReadDoubleWord(0x50001000+0x84+0x80*(n-1)+0x2C) >> 16) * (b.ReadDoubleWord(0x50001000+0x84+0x80*(n-1)+0x30) & 0x7FF))) for n in (1,2)]"

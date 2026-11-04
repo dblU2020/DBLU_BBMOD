@@ -1,0 +1,19 @@
+# Bitbox micro boot spike. Usage (from the repo root):
+#   ~/tools/renode/Renode.app/Contents/MacOS/renode --console --disable-gui -e "\$bin=@$(pwd)/firmware/MICRO.BIN; \$repl=@$(pwd)/sim/micro.repl; include @sim/boot.resc"
+# The bootloader is not in the image: it leaves the application at 0x08040000 (vector table there).
+mach create "micro"
+machine LoadPlatformDescription $repl
+sysbus LoadBinary $bin 0x08040000
+cpu VectorTableOffset 0x08040000
+cpu SP `sysbus ReadDoubleWord 0x08040000`
+cpu PC `sysbus ReadDoubleWord 0x08040004`
+logLevel 2
+# Renode's DMA2D creates its colour converters only on a pixel format change; the firmware's first CLUT load comes
+# before one (NullReference in the CLUT START callback). Toggle FG / BG PFCCR once so they exist.
+sysbus WriteDoubleWord 0x5200101C 0x1
+sysbus WriteDoubleWord 0x5200101C 0x0
+sysbus WriteDoubleWord 0x52001024 0x1
+sysbus WriteDoubleWord 0x52001024 0x0
+# Renode's DMA2D raises its interrupt after every transfer, whether TCIE is set or not; the firmware polls for the end
+# of a transfer, its IRQ handler finds no enabled event and clears nothing -> endless interrupt. Line disconnected.
+python "self.Machine['sysbus.dma2d'].IRQ.Disconnect()"

@@ -1,0 +1,28 @@
+/* Two regions, generated into out/cave.ld by build.sh (which substitutes the bank 2 object list).
+
+   CAVE  - bank 1, appended directly after the stock image (which ends at 0x080F1E78). The SD installer refuses an
+           image that runs past the end of bank 1 at 0x08100000 (3.1.G was 76 bytes over: "unable to verify"), so
+           the cave is 0xE188 = 57,736 bytes at most and the linker enforces it.
+   BANK2 - flash bank 2, which the installer never writes and our own code programs over USB (see BANK2.md: the
+           chip has 2 MB, SWAP_BANK_OPT is 0, and program / erase / EXECUTE are all proven on the test unit).
+           Sectors 0-6 only: 0x08100000 to 0x081DFFFF, 0xE0000 = 917,504 bytes. SECTOR 7 IS THE TEST UNIT'S FACTORY
+           CALIBRATION at 0x081E0000 and must never be in this region.
+   Calls between the two are a plain BL - 57 KB apart, well inside range - so no veneers and no relocation. */
+MEMORY {
+  CAVE  (rx) : ORIGIN = 0x080F1E78, LENGTH = 0xE188
+  BANK2 (rx) : ORIGIN = 0x08100000, LENGTH = 0xE0000
+}
+SECTIONS {
+  /* The header goes first in bank 2: magic, build id, length, checksum, filled in by build.sh after the link. */
+  .b2head : { KEEP(*(.b2head)) } > BANK2
+  .bank2  : { @B2_OBJS@ } > BANK2
+  /*
+   * The cave is laid out however the linker likes: nothing outside it holds one of its addresses except the
+   * patches, which are worked out from this link's symbols every build (patches/*.py). Until 3.3.c it had one
+   * PINNED address, 0x080f8b40, for a jump that bank 2's code called - see rev4.c for how that went.
+   */
+  .cave   : {
+    *(.text .text.* .rodata .rodata.*)
+  } > CAVE
+  /DISCARD/ : { *(.data .data.* .bss .bss.* COMMON .ARM.exidx* .comment) }
+}
