@@ -65,6 +65,8 @@ The patcher only accepts the unmodified 3.1.9 file and checks the result:
 - Tested on one unit so far. Reports are welcome as GitHub issues.
 - Everything in JOEBOX 1's known issues applies too (CPU headroom on heavy projects, USB on some units).
 - The EQ has no tab of its own yet: it lives behind INFO on the Conf tab's EQ row.
+- On the EQ and Insert knob pages the sample's name in the header is shown off-centre (cosmetic; the Insert page
+  has it in JOEBOX 1 too). It goes away for the EQ once the EQ gets its own tab.
 
 ## Build from source
 
